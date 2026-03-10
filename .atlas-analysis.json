@@ -1,0 +1,116 @@
+{
+  "projectType": "api-service",
+  "projectName": "Kioto Teteria Backend",
+  "projectDescription": "NestJS-based REST API backend for managing a tea shop with products, categories, orders, and authentication",
+  "theme": "aspen",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "core/authentication",
+              "core/authorization",
+              "core/database",
+              "core/pagination"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "api/products/list",
+              "api/products/get",
+              "api/products/create",
+              "api/products/update-status",
+              "api/products/delete",
+              "api/products/by-category"
+            ]
+          },
+          {
+            "group": "Categories",
+            "pages": [
+              "api/categories/list",
+              "api/categories/get",
+              "api/categories/create",
+              "api/categories/update",
+              "api/categories/delete"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api/orders/list",
+              "api/orders/get",
+              "api/orders/create",
+              "api/orders/update-status"
+            ]
+          },
+          {
+            "group": "Newsletter",
+            "pages": [
+              "api/newsletter/subscribe"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT-based authentication and role-based authorization",
+    "Product and category management with slug-based URLs",
+    "Order processing with status tracking",
+    "Newsletter subscription management",
+    "Prisma ORM with PostgreSQL database",
+    "Request validation and pagination support"
+  ],
+  "publicApiSurface": [
+    "POST /auth/login",
+    "GET /products",
+    "GET /products/:id",
+    "GET /products/category/:categoryId",
+    "POST /products",
+    "PATCH /products/:id/status",
+    "DELETE /products/:id",
+    "GET /categories",
+    "GET /categories/:identifier",
+    "POST /categories",
+    "PATCH /categories/:id",
+    "DELETE /categories/:id",
+    "GET /orders",
+    "GET /orders/:id",
+    "POST /orders",
+    "PATCH /orders/:id/status",
+    "POST /newsletter/subscribe"
+  ]
+}
