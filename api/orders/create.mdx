@@ -1,0 +1,187 @@
+---
+title: "Create Order"
+api: "POST /orders"
+description: "Create a new order with one or more items"
+---
+
+Creates a new order with the status `PENDING`. The total amount is automatically calculated based on the current product prices and quantities. The operation is performed within a database transaction to ensure data consistency.
+
+## Validation Rules
+
+- Order must contain at least one item
+- All products must exist and be active
+- Product IDs must be unique within the order
+- Quantities must be at least 1
+
+## Request Body
+
+<ParamField body="customerEmail" type="string" required>
+  Valid email address of the customer placing the order
+  
+  **Validation:** Must be a valid email format
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of order items. Must contain at least one item.
+  
+  <ParamField body="productId" type="integer" required>
+    ID of the product to order. Must reference an active product.
+    
+    **Validation:** Minimum value of 1
+  </ParamField>
+  
+  <ParamField body="quantity" type="integer" required>
+    Quantity of the product to order
+    
+    **Validation:** Minimum value of 1
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the created order
+</ResponseField>
+
+<ResponseField name="customerEmail" type="string">
+  Customer's email address
+</ResponseField>
+
+<ResponseField name="totalAmount" type="decimal">
+  Calculated total amount based on product prices and quantities
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Order status. Will always be `PENDING` for newly created orders
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  Timestamp when the order was created
+</ResponseField>
+
+<ResponseField name="items" type="OrderItem[]">
+  Array of created order items
+  
+  <ResponseField name="id" type="integer">
+    Unique identifier for the order item
+  </ResponseField>
+  
+  <ResponseField name="productId" type="integer">
+    ID of the ordered product
+  </ResponseField>
+  
+  <ResponseField name="quantity" type="integer">
+    Quantity ordered
+  </ResponseField>
+  
+  <ResponseField name="unitPrice" type="decimal">
+    Unit price at the time of order creation
+  </ResponseField>
+  
+  <ResponseField name="orderId" type="integer">
+    Reference to the parent order
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --location 'http://localhost:3000/orders' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "customerEmail": "customer@example.com",
+  "items": [
+    {
+      "productId": 1,
+      "quantity": 2
+    },
+    {
+      "productId": 3,
+      "quantity": 1
+    }
+  ]
+}'
+```
+
+```bash Single Item Order
+curl --location 'http://localhost:3000/orders' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "customerEmail": "john@example.com",
+  "items": [
+    {
+      "productId": 5,
+      "quantity": 1
+    }
+  ]
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 201 - Success
+{
+  "id": 1,
+  "customerEmail": "customer@example.com",
+  "totalAmount": "45.50",
+  "status": "PENDING",
+  "createdAt": "2026-03-10T10:30:00.000Z",
+  "items": [
+    {
+      "id": 1,
+      "orderId": 1,
+      "productId": 1,
+      "quantity": 2,
+      "unitPrice": "15.50"
+    },
+    {
+      "id": 2,
+      "orderId": 1,
+      "productId": 3,
+      "quantity": 1,
+      "unitPrice": "14.50"
+    }
+  ]
+}
+```
+
+```json 400 - Validation Error (Empty Items)
+{
+  "statusCode": 400,
+  "message": "Order must contain at least one item",
+  "error": "Bad Request"
+}
+```
+
+```json 400 - Invalid Product
+{
+  "statusCode": 400,
+  "message": "One or more products are invalid",
+  "error": "Bad Request"
+}
+```
+
+```json 400 - Invalid Email
+{
+  "statusCode": 400,
+  "message": [
+    "customerEmail must be an email"
+  ],
+  "error": "Bad Request"
+}
+```
+
+```json 400 - Invalid Quantity
+{
+  "statusCode": 400,
+  "message": [
+    "items.0.quantity must not be less than 1",
+    "items.0.quantity must be an integer number"
+  ],
+  "error": "Bad Request"
+}
+```
+
+</ResponseExample>

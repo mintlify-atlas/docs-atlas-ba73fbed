@@ -1,0 +1,203 @@
+---
+title: Authorization
+description: Role-based access control in Kioto Teteria Backend
+---
+
+## Overview
+
+Kioto Teteria Backend implements role-based access control (RBAC) to restrict access to specific endpoints based on user roles. Authorization is enforced using the `RolesGuard` in combination with the `@Roles()` decorator.
+
+## How It Works
+
+Authorization happens after authentication. The system checks if the authenticated user has the required role(s) to access a specific endpoint.
+
+### Components
+
+1. **RolesGuard** - Guard that checks user roles
+2. **@Roles() Decorator** - Decorator to specify required roles
+3. **JWT Payload** - Contains user role information
+
+## Roles Guard
+
+The `RolesGuard` implements the `CanActivate` interface to perform role checks:
+
+```typescript
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredRoles) return true;
+
+    const { user } = context.switchToHttp().getRequest();
+
+    return requiredRoles.includes(user.role);
+  }
+}
+```
+
+See the complete implementation at `src/guards/roles.guard.ts:6`
+
+### How the Guard Works
+
+1. Uses NestJS's `Reflector` to read metadata from the route handler
+2. If no roles are specified, access is granted (returns `true`)
+3. Extracts the user object from the request (populated by JWT authentication)
+4. Checks if the user's role matches any of the required roles
+
+## Roles Decorator
+
+The `@Roles()` decorator attaches role metadata to route handlers:
+
+```typescript
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+```
+
+See `src/modules/auth/decorators/roles.decorator.ts:3`
+
+## Usage Example
+
+To protect an endpoint with role-based authorization:
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+@Post()
+createCategory(@Body() createCategoryDto: CreateCategoryDto) {
+  return this.categoriesService.create(createCategoryDto);
+}
+```
+
+From `src/modules/categories/categories.controller.ts:22`
+
+### Multiple Guards
+
+<Note>
+  Authorization requires authentication. Always use `JwtAuthGuard` before `RolesGuard` in the guards array.
+</Note>
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+```
+
+The guards execute in order:
+1. `JwtAuthGuard` validates the JWT and attaches user info to the request
+2. `RolesGuard` checks if the user has the required role
+
+## Current Roles
+
+The system currently defines the following role:
+
+### ADMIN
+
+The ADMIN role is assigned to admin users in the database and grants access to protected endpoints.
+
+From the Admin model (`prisma/schema.prisma:14`):
+
+```prisma
+model Admin {
+  id           Int     @id @default(autoincrement())
+  email        String  @unique
+  passwordHash String
+  isActive     Boolean @default(true)
+  role         String  @default("ADMIN")
+}
+```
+
+## Protected Endpoints
+
+The following operations require ADMIN role:
+
+### Categories
+
+- `POST /categories` - Create category
+- `PATCH /categories/:id` - Update category
+- `DELETE /categories/:id` - Delete category
+
+### Products
+
+- `POST /products` - Create product
+- `PATCH /products/:id/status` - Update product status
+- `DELETE /products/:id` - Delete product
+
+From `src/modules/products/products.controller.ts:39`:
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+@Post()
+create(@Body() createProductDto: CreateProductDto) {
+  return this.productsService.create(createProductDto);
+}
+```
+
+## Public Endpoints
+
+Endpoints without guards are publicly accessible:
+
+- `GET /categories` - List all categories
+- `GET /products` - List products (paginated)
+- `GET /products/:id` - Get product details
+- `POST /auth/login` - Admin login
+
+## Error Responses
+
+When authorization fails, NestJS returns:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource",
+  "error": "Forbidden"
+}
+```
+
+<Warning>
+  If authentication fails (no valid JWT), you'll receive a 401 Unauthorized error instead of 403 Forbidden.
+</Warning>
+
+## Multiple Roles
+
+The `@Roles()` decorator accepts multiple roles:
+
+```typescript
+@Roles('ADMIN', 'SUPER_ADMIN')
+```
+
+The guard will grant access if the user has **any** of the specified roles.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always combine with authentication">
+    The `RolesGuard` relies on the user object in the request. Always use `JwtAuthGuard` before `RolesGuard`.
+  </Accordion>
+
+  <Accordion title="Apply at method level">
+    Apply guards to individual route handlers rather than the entire controller for fine-grained control.
+  </Accordion>
+
+  <Accordion title="Check isActive flag">
+    The authentication system already checks the `isActive` flag during login. Inactive admins cannot obtain valid tokens.
+  </Accordion>
+</AccordionGroup>
+
+## Extending the Role System
+
+To add new roles:
+
+1. Update the Admin model in `prisma/schema.prisma` if you want to use an enum
+2. Assign roles when creating admin users
+3. Use the `@Roles()` decorator with your new role names
+
+## Related
+
+- [Authentication](/core/authentication) - Learn about JWT authentication
+- [Database](/core/database) - Understand the Admin model

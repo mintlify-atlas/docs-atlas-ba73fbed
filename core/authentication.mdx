@@ -1,0 +1,195 @@
+---
+title: Authentication
+description: Learn how JWT-based authentication works in Kioto Teteria Backend
+---
+
+## Overview
+
+Kioto Teteria Backend uses JWT (JSON Web Token) based authentication to secure API endpoints. The authentication system is built using NestJS's Passport integration with the `passport-jwt` strategy.
+
+## How It Works
+
+The authentication flow consists of three main components:
+
+1. **Login endpoint** - Validates credentials and issues JWT tokens
+2. **JWT Strategy** - Validates tokens and extracts user information
+3. **JWT Guard** - Protects routes requiring authentication
+
+### Login Flow
+
+Admins authenticate by sending their email and password to the `/auth/login` endpoint:
+
+```typescript
+@Post('login')
+login(@Body() loginDto: LoginDto) {
+  return this.authService.login(loginDto.email, loginDto.password);
+}
+```
+
+The `AuthService` validates the credentials against the database:
+
+```typescript
+async login(email: string, password: string) {
+  const admin = await this.prisma.admin.findUnique({
+    where: { email },
+  });
+
+  if (!admin?.isActive) {
+    throw new BadRequestException('Invalid credentials');
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
+
+  if (!isPasswordValid) {
+    throw new BadRequestException('Invalid credentials');
+  }
+
+  const payload = {
+    id: admin.id,
+    email: admin.email,
+    role: admin.role,
+  };
+  return {
+    access_token: this.jwtService.sign(payload),
+  };
+}
+```
+
+See the full implementation in `src/modules/auth/auth.service.ts:12`
+
+### Password Security
+
+Passwords are hashed using bcrypt before storage. The system uses `bcrypt.compare()` to validate passwords without ever storing them in plain text.
+
+### JWT Payload Structure
+
+The JWT token contains the following claims:
+
+- `id` - Admin user ID
+- `email` - Admin email address
+- `role` - Admin role (used for authorization)
+
+## JWT Strategy
+
+The JWT strategy extracts and validates tokens from the Authorization header:
+
+```typescript
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      secretOrKey: process.env.JWT_SECRET || 'supersecret',
+    });
+  }
+
+  async validate(payload: JwtPayload): Promise<JwtPayload> {
+    return payload;
+  }
+}
+```
+
+See `src/common/jwt.strategy.ts:12` for the complete implementation.
+
+### Token Extraction
+
+Tokens are extracted from the `Authorization` header using the Bearer scheme:
+
+```
+Authorization: Bearer <token>
+```
+
+## Protecting Routes
+
+To protect routes, apply the `JwtAuthGuard`:
+
+```typescript
+@UseGuards(JwtAuthGuard)
+@Post()
+createCategory(@Body() createCategoryDto: CreateCategoryDto) {
+  return this.categoriesService.create(createCategoryDto);
+}
+```
+
+## Configuration
+
+JWT authentication is configured in the `AuthModule`:
+
+```typescript
+@Module({
+  imports: [
+    PrismaModule,
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: process.env.JWT_SECRET,
+        signOptions: { expiresIn: '3h' },
+      }),
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy],
+})
+export class AuthModule {}
+```
+
+See `src/modules/auth/auth.module.ts:8`
+
+### Environment Variables
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key used to sign and verify JWT tokens. Should be a strong, randomly generated string.
+</ParamField>
+
+### Token Expiration
+
+Tokens expire after 3 hours by default. This is configured in the `signOptions` when registering the JWT module.
+
+## Login Request
+
+### Request Body
+
+```json
+{
+  "email": "admin@example.com",
+  "password": "your-password"
+}
+```
+
+### Response
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+## Using the Access Token
+
+Include the access token in the Authorization header for authenticated requests:
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  https://api.example.com/categories
+```
+
+## Error Handling
+
+The authentication system returns appropriate HTTP status codes:
+
+- `400 Bad Request` - Invalid credentials or inactive account
+- `401 Unauthorized` - Missing or invalid token
+
+## Security Considerations
+
+<Warning>
+  Always use a strong, randomly generated `JWT_SECRET` in production. Never commit secrets to version control.
+</Warning>
+
+<Info>
+  Inactive admin accounts (where `isActive: false`) cannot authenticate, even with valid credentials.
+</Info>
+
+## Related
+
+- [Authorization](/core/authorization) - Learn about role-based access control
+- [Database](/core/database) - Understand the Admin model structure

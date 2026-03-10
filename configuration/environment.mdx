@@ -1,0 +1,279 @@
+---
+title: Environment Variables
+description: Configure the Kioto Teteria backend using environment variables for database connections, authentication, and application settings
+---
+
+The Kioto Teteria backend uses environment variables to manage configuration across different deployment environments. All environment variables are loaded using the `@nestjs/config` module configured globally in `app.module.ts:13`.
+
+## Quick Start
+
+Create a `.env` file in the root directory of your project:
+
+```bash
+# .env
+DATABASE_URL="postgresql://user:password@localhost:5432/kioto_teteria"
+JWT_SECRET="your-secure-jwt-secret-key"
+PORT=3000
+```
+
+<Warning>
+  Never commit `.env` files to version control. The `.gitignore` is already configured to exclude environment files.
+</Warning>
+
+## Required Variables
+
+### DATABASE_URL
+
+PostgreSQL connection string used by Prisma for database access.
+
+```bash
+DATABASE_URL="postgresql://username:password@host:port/database?schema=public"
+```
+
+**Format breakdown:**
+- `username`: PostgreSQL user
+- `password`: User password
+- `host`: Database server hostname or IP
+- `port`: PostgreSQL port (default: 5432)
+- `database`: Database name
+- `schema`: PostgreSQL schema (default: public)
+
+**Referenced in:**
+- `prisma.config.ts:10` - Prisma configuration
+- `prisma/schema.prisma:5-7` - Datasource configuration
+
+<Note>
+  The connection string must point to a PostgreSQL database. Other database providers are not currently supported.
+</Note>
+
+### JWT_SECRET
+
+Secret key for signing and verifying JWT tokens used in authentication.
+
+```bash
+JWT_SECRET="your-randomly-generated-secret-key-min-32-chars"
+```
+
+**Best practices:**
+- Use at least 32 characters
+- Generate using a cryptographically secure method
+- Use different secrets for each environment
+- Rotate periodically in production
+
+**Referenced in:**
+- `src/modules/auth/auth.module.ts:13` - JWT module configuration
+- `src/common/jwt.strategy.ts:16` - JWT strategy validation
+
+**Generate a secure secret:**
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+<Tip>
+  If `JWT_SECRET` is not set, the application falls back to `'supersecret'` in development (see `jwt.strategy.ts:16`), but this should never be used in production.
+</Tip>
+
+## Optional Variables
+
+### PORT
+
+The port on which the application server listens.
+
+```bash
+PORT=3000
+```
+
+**Default:** `3000` (configured in `src/main.ts:17`)
+
+**Valid range:** 1024-65535
+
+**Common ports:**
+- Development: `3000`
+- Production: `8080`, `3000`, or platform-specific
+
+### SHADOW_DATABASE_URL
+
+Optional shadow database URL used by Prisma Migrate for migration development.
+
+```bash
+SHADOW_DATABASE_URL="postgresql://user:password@localhost:5432/kioto_teteria_shadow"
+```
+
+**Referenced in:**
+- `prisma.config.ts:11` - Prisma migration configuration
+
+**When to use:**
+- Development environments with migration creation
+- CI/CD pipelines running migrations
+- When you don't have permission to create temporary databases
+
+<Note>
+  The shadow database should be a separate database with the same schema permissions as your main database.
+</Note>
+
+## Environment-Specific Configuration
+
+### Development
+
+Create `.env.development.local` for development overrides:
+
+```bash
+DATABASE_URL="postgresql://dev:dev@localhost:5432/kioto_dev"
+JWT_SECRET="dev-secret-not-for-production"
+PORT=3001
+```
+
+### Production
+
+Set environment variables through your hosting platform:
+
+```bash
+DATABASE_URL="postgresql://prod_user:secure_pass@prod-db.example.com:5432/kioto_prod"
+JWT_SECRET="production-secret-from-secrets-manager"
+PORT=8080
+```
+
+<Warning>
+  In production, use your platform's secret management system (AWS Secrets Manager, Azure Key Vault, etc.) instead of `.env` files.
+</Warning>
+
+## Validation Pipeline
+
+The application uses `class-validator` with a global validation pipe configured in `src/main.ts:9-15`:
+
+```typescript
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,           // Strip properties without decorators
+    forbidNonWhitelisted: true, // Throw error on extra properties
+    transform: true,            // Auto-transform payloads to DTO types
+  }),
+);
+```
+
+This ensures all incoming requests are validated against DTOs before reaching controllers.
+
+## Configuration Module
+
+The `ConfigModule` is imported globally in `src/app.module.ts:13-15`:
+
+```typescript
+ConfigModule.forRoot({
+  isGlobal: true,
+})
+```
+
+This allows you to inject `ConfigService` anywhere in the application:
+
+```typescript
+import { ConfigService } from '@nestjs/config';
+
+constructor(private configService: ConfigService) {}
+
+getDatabaseUrl() {
+  return this.configService.get<string>('DATABASE_URL');
+}
+```
+
+## Loading Priority
+
+Environment variables are loaded in the following order (later sources override earlier ones):
+
+1. System environment variables
+2. `.env` file (base configuration)
+3. `.env.local` (local overrides, gitignored)
+4. `.env.development.local` or `.env.production.local` (environment-specific)
+5. Command-line environment variables
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use secret management in production">
+    Never store secrets in `.env` files in production. Use platform-provided secret management:
+    - AWS: Secrets Manager or Parameter Store
+    - Azure: Key Vault
+    - Google Cloud: Secret Manager
+    - Docker: Docker Secrets
+  </Accordion>
+
+  <Accordion title="Rotate secrets regularly">
+    Implement a secret rotation policy:
+    - JWT secrets: Every 90 days
+    - Database passwords: Every 60-90 days
+    - API keys: Based on provider recommendations
+  </Accordion>
+
+  <Accordion title="Use different secrets per environment">
+    Never reuse secrets across environments:
+    - Development secrets should differ from production
+    - Each deployment environment gets unique credentials
+    - Leaked development secrets don't compromise production
+  </Accordion>
+
+  <Accordion title="Verify .gitignore configuration">
+    The `.gitignore` file already excludes:
+    ```
+    .env
+    .env.development.local
+    .env.test.local
+    .env.production.local
+    .env.local
+    ```
+    Never commit changes that expose these files.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database connection fails">
+    **Error:** `Can't reach database server`
+
+    **Solutions:**
+    1. Verify `DATABASE_URL` format is correct
+    2. Check database server is running
+    3. Confirm network access to database host
+    4. Verify credentials are correct
+    5. Check PostgreSQL port (default 5432) is accessible
+  </Accordion>
+
+  <Accordion title="JWT authentication fails">
+    **Error:** `Unauthorized` or `Invalid token`
+
+    **Solutions:**
+    1. Verify `JWT_SECRET` matches between environments
+    2. Check token hasn't expired (default: 3 hours)
+    3. Ensure secret is set (not using fallback `'supersecret'`)
+    4. Verify Authorization header format: `Bearer <token>`
+  </Accordion>
+
+  <Accordion title="Environment variables not loading">
+    **Solutions:**
+    1. Ensure `.env` file is in project root
+    2. Restart the application after changing `.env`
+    3. Check for syntax errors in `.env` file
+    4. Verify `@nestjs/config` is installed
+    5. Confirm `ConfigModule.forRoot()` is imported in `AppModule`
+  </Accordion>
+
+  <Accordion title="Port already in use">
+    **Error:** `EADDRINUSE: address already in use :::3000`
+
+    **Solutions:**
+    1. Change `PORT` in `.env` to different value
+    2. Kill process using the port: `lsof -ti:3000 | xargs kill`
+    3. Use different port for parallel development environments
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deployment Guide" icon="rocket" href="/configuration/deployment">
+    Learn how to deploy the application to production
+  </Card>
+  <Card title="Database Setup" icon="database" href="/core/database">
+    Configure and migrate your PostgreSQL database
+  </Card>
+</CardGroup>

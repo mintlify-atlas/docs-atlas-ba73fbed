@@ -1,0 +1,136 @@
+---
+title: Update Category
+api: PATCH /categories/:id
+---
+
+Updates an existing category. When updating the name, the slug is automatically regenerated.
+
+<Note>
+  This endpoint requires authentication with an `ADMIN` role.
+</Note>
+
+## Authentication
+
+Requires a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <token>
+```
+
+## Path Parameters
+
+<ParamField path="id" type="number" required>
+  Category ID (must be numeric)
+</ParamField>
+
+## Body Parameters
+
+All fields are optional. Only provide the fields you want to update.
+
+<ParamField body="name" type="string">
+  Category name. Must be between 2 and 50 characters.
+  
+  **Validation:**
+  - Minimum length: 2 characters
+  - Maximum length: 50 characters
+  - Must be unique
+  
+  <Note>
+    When the name is updated, the slug is automatically regenerated.
+  </Note>
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Whether the category should be active
+</ParamField>
+
+## Response
+
+<ResponseField name="data" type="Category">
+  The updated category object
+  
+  <Expandable title="Category object">
+    <ResponseField name="id" type="number" required>
+      Unique identifier for the category
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      Category name
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string" required>
+      URL-friendly slug, automatically generated from name
+    </ResponseField>
+    
+    <ResponseField name="isActive" type="boolean" required>
+      Whether the category is active
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string" required>
+      ISO 8601 timestamp of when the category was created
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl --request PATCH \
+  --url https://api.example.com/categories/1 \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Premium Teas",
+    "isActive": true
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": 1,
+  "name": "Premium Teas",
+  "slug": "premium-teas",
+  "isActive": true,
+  "createdAt": "2024-03-10T12:00:00.000Z"
+}
+```
+
+```json 400 - Duplicate
+{
+  "statusCode": 400,
+  "message": "Category name or slug already exists"
+}
+```
+
+```json 400 - Validation Error
+{
+  "statusCode": 400,
+  "message": [
+    "name must be longer than or equal to 2 characters",
+    "name must be shorter than or equal to 50 characters"
+  ],
+  "error": "Bad Request"
+}
+```
+
+```json 400 - Not Found
+{
+  "statusCode": 400,
+  "message": "Error updating category"
+}
+```
+
+```json 401 - Unauthorized
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+```json 403 - Forbidden
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+</ResponseExample>

@@ -1,0 +1,123 @@
+---
+title: 'Subscribe to Newsletter'
+description: 'Subscribe an email address to the newsletter'
+api: 'POST /newsletter/subscribe'
+---
+
+Subscribe a new email address to receive newsletter updates. This is a public endpoint that does not require authentication.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  The email address to subscribe to the newsletter. Must be a valid email format.
+  
+  **Validation:**
+  - Must be a valid email address
+  - Cannot be empty
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="integer">
+  The unique identifier of the newsletter subscriber
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The subscribed email address
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean">
+  Whether the subscription is active (defaults to `true`)
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of when the subscription was created
+</ResponseField>
+
+## Examples
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.example.com/newsletter/subscribe \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/newsletter/subscribe', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com'
+  })
+});
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.example.com/newsletter/subscribe',
+    json={
+        'email': 'user@example.com'
+    }
+)
+
+data = response.json()
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Success Response (201)
+{
+  "id": 42,
+  "email": "user@example.com",
+  "isActive": true,
+  "createdAt": "2026-03-10T14:30:00.000Z"
+}
+```
+
+```json Error - Email Already Subscribed (409)
+{
+  "statusCode": 409,
+  "message": "Email already subscribed",
+  "error": "Conflict"
+}
+```
+
+```json Error - Invalid Email (400)
+{
+  "statusCode": 400,
+  "message": [
+    "email must be an email"
+  ],
+  "error": "Bad Request"
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 201 | Successfully subscribed to newsletter |
+| 400 | Invalid request body or email format |
+| 409 | Email address is already subscribed |
+| 500 | Internal server error |
+
+## Notes
+
+- Email addresses are unique - attempting to subscribe the same email twice will result in a 409 Conflict error
+- Email validation follows standard RFC 5322 format
+- New subscriptions are automatically set to active status
+- This endpoint is public and does not require authentication

@@ -1,0 +1,76 @@
+---
+title: "Get Order"
+api: "GET /orders/:id"
+description: "Retrieve a single order by its ID"
+---
+
+Fetches detailed information about a specific order by its unique identifier.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Unique identifier of the order to retrieve
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the order
+</ResponseField>
+
+<ResponseField name="customerEmail" type="string">
+  Customer's email address
+</ResponseField>
+
+<ResponseField name="totalAmount" type="decimal">
+  Total order amount with 2 decimal precision (e.g., "45.50")
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Current order status. One of:
+  - `PENDING` - Order created, awaiting payment
+  - `PAID` - Payment confirmed
+  - `CANCELLED` - Order cancelled
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  ISO 8601 timestamp when the order was created
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --location 'http://localhost:3000/orders/1'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 - Success
+{
+  "id": 1,
+  "customerEmail": "customer@example.com",
+  "totalAmount": "45.50",
+  "status": "PENDING",
+  "createdAt": "2026-03-10T10:30:00.000Z"
+}
+```
+
+```json 404 - Order Not Found
+{
+  "statusCode": 404,
+  "message": "Order not found",
+  "error": "Not Found"
+}
+```
+
+```json 400 - Invalid ID Format
+{
+  "statusCode": 400,
+  "message": "Validation failed (numeric string is expected)",
+  "error": "Bad Request"
+}
+```
+
+</ResponseExample>

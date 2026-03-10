@@ -1,0 +1,118 @@
+---
+title: "List Orders"
+api: "GET /orders"
+description: "Retrieve a paginated list of orders with optional filtering by status and customer email"
+---
+
+Returns a paginated list of all orders, sorted by creation date (newest first). Supports filtering by order status and customer email.
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="pageSize" type="integer" default="10">
+  Number of orders per page
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter orders by status. Must be one of: `PENDING`, `PAID`, `CANCELLED`
+</ParamField>
+
+<ParamField query="customerEmail" type="string">
+  Filter orders by customer email address
+</ParamField>
+
+## Response
+
+<ResponseField name="data" type="Order[]">
+  Array of order objects
+  
+  <ResponseField name="id" type="integer">
+    Unique identifier for the order
+  </ResponseField>
+  
+  <ResponseField name="customerEmail" type="string">
+    Customer's email address
+  </ResponseField>
+  
+  <ResponseField name="totalAmount" type="decimal">
+    Total order amount (calculated from order items)
+  </ResponseField>
+  
+  <ResponseField name="status" type="enum">
+    Order status: `PENDING`, `PAID`, or `CANCELLED`
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="datetime">
+    Timestamp when the order was created
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata
+  
+  <ResponseField name="total" type="integer">
+    Total number of orders matching the filter criteria
+  </ResponseField>
+  
+  <ResponseField name="page" type="integer">
+    Current page number
+  </ResponseField>
+  
+  <ResponseField name="pageSize" type="integer">
+    Number of items per page
+  </ResponseField>
+  
+  <ResponseField name="totalPages" type="integer">
+    Total number of pages
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --location 'http://localhost:3000/orders?page=1&pageSize=10&status=PENDING'
+```
+
+```bash Filter by Customer
+curl --location 'http://localhost:3000/orders?customerEmail=customer@example.com'
+```
+
+```bash Pagination
+curl --location 'http://localhost:3000/orders?page=2&pageSize=20'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 - Success
+{
+  "data": [
+    {
+      "id": 1,
+      "customerEmail": "customer@example.com",
+      "totalAmount": "45.50",
+      "status": "PENDING",
+      "createdAt": "2026-03-10T10:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "customerEmail": "another@example.com",
+      "totalAmount": "23.00",
+      "status": "PAID",
+      "createdAt": "2026-03-10T09:15:00.000Z"
+    }
+  ],
+  "meta": {
+    "total": 42,
+    "page": 1,
+    "pageSize": 10,
+    "totalPages": 5
+  }
+}
+```
+
+</ResponseExample>

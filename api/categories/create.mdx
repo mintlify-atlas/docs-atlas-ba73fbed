@@ -1,0 +1,120 @@
+---
+title: Create Category
+api: POST /categories
+---
+
+Creates a new category. The slug is automatically generated from the category name.
+
+<Note>
+  This endpoint requires authentication with an `ADMIN` role.
+</Note>
+
+## Authentication
+
+Requires a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <token>
+```
+
+## Body Parameters
+
+<ParamField body="name" type="string" required>
+  Category name. Must be between 2 and 50 characters.
+  
+  **Validation:**
+  - Minimum length: 2 characters
+  - Maximum length: 50 characters
+  - Must not be empty
+  - Must be unique
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Whether the category should be active. Defaults to `true` if not provided.
+</ParamField>
+
+## Response
+
+<ResponseField name="data" type="Category">
+  The created category object
+  
+  <Expandable title="Category object">
+    <ResponseField name="id" type="number" required>
+      Unique identifier for the category
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      Category name
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string" required>
+      URL-friendly slug, automatically generated from name
+    </ResponseField>
+    
+    <ResponseField name="isActive" type="boolean" required>
+      Whether the category is active
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string" required>
+      ISO 8601 timestamp of when the category was created
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl --request POST \
+  --url https://api.example.com/categories \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Teas",
+    "isActive": true
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": 1,
+  "name": "Teas",
+  "slug": "teas",
+  "isActive": true,
+  "createdAt": "2024-03-10T12:00:00.000Z"
+}
+```
+
+```json 400 - Duplicate
+{
+  "statusCode": 400,
+  "message": "Category name or slug already exists"
+}
+```
+
+```json 400 - Validation Error
+{
+  "statusCode": 400,
+  "message": [
+    "name must be longer than or equal to 2 characters",
+    "name must be shorter than or equal to 50 characters",
+    "name should not be empty",
+    "name must be a string"
+  ],
+  "error": "Bad Request"
+}
+```
+
+```json 401 - Unauthorized
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+```json 403 - Forbidden
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+</ResponseExample>

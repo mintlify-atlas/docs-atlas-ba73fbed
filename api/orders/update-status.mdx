@@ -1,0 +1,106 @@
+---
+title: "Update Order Status"
+api: "PATCH /orders/:id/status"
+description: "Update the status of an existing order"
+---
+
+Updates the status of an order. This endpoint is typically used to mark orders as paid or cancelled.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Unique identifier of the order to update
+</ParamField>
+
+## Request Body
+
+<ParamField body="status" type="enum" required>
+  New status for the order. Must be one of:
+  - `PENDING` - Order awaiting payment
+  - `PAID` - Payment confirmed
+  - `CANCELLED` - Order cancelled
+  
+  **Validation:** Must be a valid OrderStatus enum value
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the order
+</ResponseField>
+
+<ResponseField name="customerEmail" type="string">
+  Customer's email address
+</ResponseField>
+
+<ResponseField name="totalAmount" type="decimal">
+  Total order amount
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Updated order status
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  Timestamp when the order was created
+</ResponseField>
+
+<RequestExample>
+
+```bash Mark as Paid
+curl --location --request PATCH 'http://localhost:3000/orders/1/status' \
+--header 'Content-Type: application/json' \
+--data '{
+  "status": "PAID"
+}'
+```
+
+```bash Cancel Order
+curl --location --request PATCH 'http://localhost:3000/orders/1/status' \
+--header 'Content-Type: application/json' \
+--data '{
+  "status": "CANCELLED"
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 - Success
+{
+  "id": 1,
+  "customerEmail": "customer@example.com",
+  "totalAmount": "45.50",
+  "status": "PAID",
+  "createdAt": "2026-03-10T10:30:00.000Z"
+}
+```
+
+```json 404 - Order Not Found
+{
+  "statusCode": 404,
+  "message": "Order not found",
+  "error": "Not Found"
+}
+```
+
+```json 400 - Invalid Status
+{
+  "statusCode": 400,
+  "message": [
+    "status must be one of the following values: PENDING, PAID, CANCELLED"
+  ],
+  "error": "Bad Request"
+}
+```
+
+```json 400 - Invalid ID Format
+{
+  "statusCode": 400,
+  "message": "Validation failed (numeric string is expected)",
+  "error": "Bad Request"
+}
+```
+
+</ResponseExample>

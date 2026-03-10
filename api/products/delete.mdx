@@ -1,0 +1,114 @@
+---
+title: "Delete Product"
+api: "DELETE /products/:id"
+description: "Delete a product by ID (Admin only)"
+auth: "Bearer token with ADMIN role required"
+---
+
+## Authentication
+
+This endpoint requires authentication with a JWT token and ADMIN role.
+
+```bash
+Authorization: Bearer <token>
+```
+
+## Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the product to delete
+</ParamField>
+
+## Response
+
+Returns the deleted product object.
+
+<ResponseField name="id" type="number">
+  Unique identifier for the deleted product
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Product name
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  URL-friendly unique identifier
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Product description
+</ResponseField>
+
+<ResponseField name="price" type="decimal">
+  Product price
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean">
+  Product active status
+</ResponseField>
+
+<ResponseField name="categoryId" type="number">
+  ID of the category this product belonged to
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  Timestamp when the product was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="datetime">
+  Timestamp when the product was last updated
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X DELETE https://api.kiototeteria.com/products/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.kiototeteria.com/products/1', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer <token>'
+  }
+});
+const deletedProduct = await response.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success
+{
+  "id": 1,
+  "name": "Matcha Green Tea",
+  "slug": "matcha-green-tea",
+  "description": "Premium organic matcha green tea from Japan",
+  "price": "12.99",
+  "isActive": true,
+  "categoryId": 1,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+```json Not Found
+{
+  "statusCode": 404,
+  "message": "Product not found"
+}
+```
+
+```json Unauthorized
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+```json Forbidden
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+</ResponseExample>

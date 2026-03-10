@@ -1,0 +1,123 @@
+---
+title: Introduction
+description: Welcome to the Kioto Teteria Backend API documentation
+---
+
+# Welcome to Kioto Teteria Backend
+
+Kioto Teteria Backend is a production-ready NestJS REST API designed for managing a modern tea shop. Built with TypeScript, Prisma ORM, and PostgreSQL, it provides a robust foundation for e-commerce operations.
+
+## Overview
+
+This backend service powers a complete tea shop experience, handling everything from product catalog management to order processing and customer engagement through newsletter subscriptions.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes with our step-by-step guide
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Explore all available endpoints and their usage
+  </Card>
+  <Card title="Authentication" icon="lock" href="/core/authentication">
+    Learn about JWT-based authentication and security
+  </Card>
+  <Card title="Database Schema" icon="database" href="/core/database">
+    Understand the data models and relationships
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Secure Authentication" icon="shield-check">
+    JWT-based authentication with role-based access control for admin operations
+  </Card>
+  <Card title="Product Management" icon="box">
+    Complete CRUD operations for products with category organization and slug-based URLs
+  </Card>
+  <Card title="Order Processing" icon="cart-shopping">
+    Full order lifecycle management with status tracking (pending, paid, cancelled)
+  </Card>
+  <Card title="Newsletter System" icon="envelope">
+    Built-in newsletter subscription management for customer engagement
+  </Card>
+  <Card title="Database Powered" icon="database">
+    Prisma ORM with PostgreSQL for reliable data persistence
+  </Card>
+  <Card title="Request Validation" icon="check-circle">
+    Automatic validation and transformation of request data with class-validator
+  </Card>
+</CardGroup>
+
+## API Endpoints
+
+The API is organized into logical resource groups:
+
+- **Authentication**: Admin login and JWT token generation
+- **Products**: Browse, search, and manage tea products
+- **Categories**: Organize products into categories
+- **Orders**: Create and track customer orders
+- **Newsletter**: Manage email subscriptions
+
+## Technology Stack
+
+<AccordionGroup>
+  <Accordion title="Core Framework">
+    - **NestJS 11**: Progressive Node.js framework with TypeScript support
+    - **Express**: Fast, unopinionated web framework
+    - **TypeScript 5.7**: Type-safe development experience
+  </Accordion>
+  
+  <Accordion title="Database & ORM">
+    - **PostgreSQL**: Reliable relational database
+    - **Prisma 7.4**: Next-generation ORM with type safety
+    - **@prisma/adapter-pg**: PostgreSQL adapter for optimal performance
+  </Accordion>
+  
+  <Accordion title="Authentication & Security">
+    - **Passport JWT**: JWT strategy for authentication
+    - **bcrypt**: Secure password hashing
+    - **class-validator**: Runtime validation decorators
+  </Accordion>
+  
+  <Accordion title="Quality & Testing">
+    - **Jest**: Testing framework with coverage reporting
+    - **ESLint**: Code quality and consistency
+    - **Prettier**: Code formatting
+    - **SonarQube**: Code quality analysis
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Steps>
+  <Step title="Installation">
+    Set up your development environment and install dependencies
+    
+    [View installation guide →](/installation)
+  </Step>
+  
+  <Step title="Quick Start">
+    Get the API running locally in minutes
+    
+    [Follow the quickstart →](/quickstart)
+  </Step>
+  
+  <Step title="Configure Environment">
+    Set up database connection and environment variables
+    
+    [Configure your setup →](/configuration/environment)
+  </Step>
+  
+  <Step title="Explore the API">
+    Start making requests and building your application
+    
+    [Browse API endpoints →](/api/auth/login)
+  </Step>
+</Steps>
+
+## Support & Community
+
+<Card title="GitHub Repository" icon="github" href="https://github.com/Jerimonski/KiotoTeteria_Backend">
+  View source code, report issues, and contribute to the project
+</Card>

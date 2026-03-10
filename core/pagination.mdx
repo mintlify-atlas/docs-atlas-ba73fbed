@@ -1,0 +1,414 @@
+---
+title: Pagination
+description: Offset-based pagination implementation in Kioto Teteria Backend
+---
+
+## Overview
+
+Kioto Teteria Backend implements offset-based pagination using a centralized `PaginationOptions` utility class. This provides consistent pagination across all list endpoints.
+
+## How It Works
+
+Pagination uses two query parameters:
+
+- `page` - The page number (1-indexed)
+- `pageSize` - Number of items per page
+
+The system returns paginated data with metadata about the total count and page information.
+
+## PaginationOptions Class
+
+The `PaginationOptions` class handles pagination logic:
+
+```typescript
+export class PaginationOptions {
+  private static readonly DEFAULT_PAGE = 1;
+  private static readonly DEFAULT_PAGE_SIZE = 10;
+  private static readonly MAX_PAGE_SIZE = 50;
+
+  static resolve(params: PaginationParams) {
+    const page = params.page ?? this.DEFAULT_PAGE;
+    const pageSize = params.pageSize ?? this.DEFAULT_PAGE_SIZE;
+
+    if (page < 1) {
+      throw new BadRequestException('Page must be greater than or equal to 1');
+    }
+
+    if (pageSize < 1 || pageSize > this.MAX_PAGE_SIZE) {
+      throw new BadRequestException(
+        `Page size must be between 1 and ${this.MAX_PAGE_SIZE}`,
+      );
+    }
+
+    const skip = (page - 1) * pageSize;
+
+    return {
+      page,
+      pageSize,
+      skip,
+      take: pageSize,
+    };
+  }
+
+  static buildMeta(
+    total: number,
+    page: number,
+    pageSize: number,
+  ): PaginationMeta {
+    return {
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+}
+```
+
+From `src/common/pagination/pagination-options.ts:15`
+
+### Configuration
+
+<ParamField path="DEFAULT_PAGE" type="number" default="1">
+  Default page number when not specified
+</ParamField>
+
+<ParamField path="DEFAULT_PAGE_SIZE" type="number" default="10">
+  Default number of items per page
+</ParamField>
+
+<ParamField path="MAX_PAGE_SIZE" type="number" default="50">
+  Maximum allowed page size to prevent performance issues
+</ParamField>
+
+## Implementation Example
+
+Here's how pagination is implemented in the products service:
+
+### Controller
+
+```typescript
+@Get()
+findAll(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+  return this.productsService.findAll({
+    page: page ? Number.parseInt(page, 10) : undefined,
+    pageSize: pageSize ? Number.parseInt(pageSize, 10) : undefined,
+  });
+}
+```
+
+From `src/modules/products/products.controller.ts:24`
+
+### Service
+
+```typescript
+async findAll(params: FindAllParams) {
+  const { page, pageSize, skip, take } = PaginationOptions.resolve(params);
+  const { categoryId } = params;
+
+  const where = {
+    ...(categoryId && { categoryId }),
+  };
+
+  const [products, total] = await this.prisma.$transaction([
+    this.prisma.product.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    }),
+    this.prisma.product.count({ where }),
+  ]);
+
+  return {
+    data: products,
+    meta: PaginationOptions.buildMeta(total, page, pageSize),
+  };
+}
+```
+
+From `src/modules/products/products.service.ts:19`
+
+## Request Examples
+
+### Default Pagination
+
+Request without parameters uses defaults (page 1, 10 items):
+
+```bash
+GET /products
+```
+
+### Custom Page Size
+
+```bash
+GET /products?pageSize=20
+```
+
+### Specific Page
+
+```bash
+GET /products?page=2&pageSize=10
+```
+
+### Maximum Page Size
+
+```bash
+GET /products?pageSize=50
+```
+
+## Response Format
+
+Paginated endpoints return this structure:
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Green Tea",
+      "slug": "green-tea",
+      "description": "Premium green tea",
+      "price": "15.99",
+      "isActive": true,
+      "categoryId": 1,
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "updatedAt": "2024-01-15T10:30:00.000Z"
+    }
+  ],
+  "meta": {
+    "total": 45,
+    "page": 1,
+    "pageSize": 10,
+    "totalPages": 5
+  }
+}
+```
+
+### Response Fields
+
+<ResponseField name="data" type="array">
+  Array of paginated items
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata
+  
+  <Expandable title="properties">
+    <ResponseField name="total" type="number">
+      Total number of items across all pages
+    </ResponseField>
+    
+    <ResponseField name="page" type="number">
+      Current page number (1-indexed)
+    </ResponseField>
+    
+    <ResponseField name="pageSize" type="number">
+      Number of items per page
+    </ResponseField>
+    
+    <ResponseField name="totalPages" type="number">
+      Total number of pages available
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Validation
+
+The pagination system validates input parameters:
+
+### Page Validation
+
+```typescript
+if (page < 1) {
+  throw new BadRequestException('Page must be greater than or equal to 1');
+}
+```
+
+**Invalid:**
+- `page=0`
+- `page=-1`
+
+**Valid:**
+- `page=1`
+- `page=100`
+
+### Page Size Validation
+
+```typescript
+if (pageSize < 1 || pageSize > this.MAX_PAGE_SIZE) {
+  throw new BadRequestException(
+    `Page size must be between 1 and ${this.MAX_PAGE_SIZE}`,
+  );
+}
+```
+
+**Invalid:**
+- `pageSize=0`
+- `pageSize=51` (exceeds maximum)
+- `pageSize=100`
+
+**Valid:**
+- `pageSize=1`
+- `pageSize=25`
+- `pageSize=50`
+
+## Database Queries
+
+Prisma's `skip` and `take` implement offset-based pagination:
+
+```typescript
+const { skip, take } = PaginationOptions.resolve({ page: 2, pageSize: 10 });
+// skip = 10, take = 10
+
+await this.prisma.product.findMany({
+  skip,  // Skip first 10 records
+  take,  // Take next 10 records
+});
+```
+
+### Offset Calculation
+
+The offset is calculated as:
+
+```typescript
+const skip = (page - 1) * pageSize;
+```
+
+**Examples:**
+- Page 1, pageSize 10: `skip = 0`
+- Page 2, pageSize 10: `skip = 10`
+- Page 3, pageSize 20: `skip = 40`
+
+## Using Transactions
+
+To ensure data consistency, fetch the data and count in a transaction:
+
+```typescript
+const [products, total] = await this.prisma.$transaction([
+  this.prisma.product.findMany({ where, skip, take }),
+  this.prisma.product.count({ where }),
+]);
+```
+
+This guarantees both queries see the same database snapshot, preventing race conditions where items are added/removed between queries.
+
+## Type Definitions
+
+### PaginationParams
+
+Input parameters for pagination:
+
+```typescript
+export interface PaginationParams {
+  page?: number;
+  pageSize?: number;
+}
+```
+
+### PaginationMeta
+
+Metadata included in responses:
+
+```typescript
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+```
+
+From `src/common/pagination/pagination-options.ts:3`
+
+## Error Responses
+
+### Invalid Page Number
+
+```json
+{
+  "statusCode": 400,
+  "message": "Page must be greater than or equal to 1",
+  "error": "Bad Request"
+}
+```
+
+### Invalid Page Size
+
+```json
+{
+  "statusCode": 400,
+  "message": "Page size must be between 1 and 50",
+  "error": "Bad Request"
+}
+```
+
+## Performance Considerations
+
+<Warning>
+  Offset-based pagination can be slow for large datasets with high page numbers. Consider cursor-based pagination for tables with millions of records.
+</Warning>
+
+### Why MAX_PAGE_SIZE?
+
+The 50-item limit prevents:
+- Database performance degradation
+- Large response payloads
+- Memory issues on the client
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use transactions for consistency">
+    Always fetch data and counts in a transaction to prevent inconsistent pagination metadata.
+  </Accordion>
+
+  <Accordion title="Apply consistent ordering">
+    Always include `orderBy` to ensure deterministic results across pages.
+    
+    ```typescript
+    orderBy: { createdAt: 'desc' }
+    ```
+  </Accordion>
+
+  <Accordion title="Parse query params carefully">
+    Query parameters are strings. Parse to numbers before passing to the service layer.
+    
+    ```typescript
+    page: page ? Number.parseInt(page, 10) : undefined
+    ```
+  </Accordion>
+
+  <Accordion title="Don't exceed MAX_PAGE_SIZE">
+    The limit protects your API. Users requesting all data should use multiple requests or a different endpoint.
+  </Accordion>
+</AccordionGroup>
+
+## Extending Pagination
+
+To modify pagination defaults:
+
+1. Update constants in `PaginationOptions` class
+2. Adjust `MAX_PAGE_SIZE` based on your performance testing
+3. Consider adding cursor-based pagination for large datasets
+
+## Cursor-Based Alternative
+
+For very large datasets, consider cursor-based pagination:
+
+```typescript
+// Using a cursor (e.g., ID or timestamp)
+{
+  cursor: { id: lastSeenId },
+  take: pageSize,
+}
+```
+
+This is more efficient for deep pagination but requires different client-side logic.
+
+## Related
+
+- [Database](/core/database) - Prisma query methods
+- [Products API](/api/products) - Example of pagination in use

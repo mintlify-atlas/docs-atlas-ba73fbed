@@ -1,0 +1,442 @@
+---
+title: Installation
+description: Complete setup guide for Kioto Teteria Backend with all prerequisites and configuration options
+---
+
+This guide covers everything you need to install and configure the Kioto Teteria Backend for development or production environments.
+
+## System Requirements
+
+### Required Software
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    **Version 18 or higher**
+    
+    Download from [nodejs.org](https://nodejs.org/)
+  </Card>
+  
+  <Card title="PostgreSQL" icon="database">
+    **Version 12 or higher**
+    
+    Download from [postgresql.org](https://www.postgresql.org/download/)
+  </Card>
+  
+  <Card title="pnpm" icon="box">
+    **Latest version**
+    
+    Install: `npm install -g pnpm`
+  </Card>
+  
+  <Card title="Git" icon="code-branch">
+    **Version 2.0 or higher**
+    
+    Download from [git-scm.com](https://git-scm.com/)
+  </Card>
+</CardGroup>
+
+## Installation Steps
+
+### 1. Clone the Repository
+
+```bash
+git clone <your-repository-url>
+cd backend
+```
+
+### 2. Install Dependencies
+
+The project uses pnpm for package management. Install all dependencies:
+
+```bash
+pnpm install
+```
+
+This will install the following key dependencies:
+
+**Core Framework:**
+- `@nestjs/core` - NestJS framework
+- `@nestjs/common` - Common utilities and decorators
+- `@nestjs/platform-express` - Express adapter
+
+**Database:**
+- `@prisma/client` - Prisma ORM client
+- `@prisma/adapter-pg` - PostgreSQL adapter
+- `pg` - PostgreSQL driver
+
+**Authentication:**
+- `@nestjs/jwt` - JWT authentication
+- `@nestjs/passport` - Passport integration
+- `passport-jwt` - JWT strategy
+- `bcrypt` - Password hashing
+
+**Validation:**
+- `class-validator` - DTO validation
+- `class-transformer` - Object transformation
+
+### 3. Configure Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash .env
+# Database Configuration
+DATABASE_URL="postgresql://username:password@localhost:5432/kioto_teteria?schema=public"
+
+# JWT Configuration
+JWT_SECRET="your-secure-random-jwt-secret-key-change-this-in-production"
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+```
+
+<Accordion title="Environment Variable Reference">
+  **DATABASE_URL**
+  
+  PostgreSQL connection string format:
+  ```
+  postgresql://[user]:[password]@[host]:[port]/[database]?schema=public
+  ```
+  
+  - `user` - Database username
+  - `password` - Database password
+  - `host` - Database host (localhost for local development)
+  - `port` - Database port (default: 5432)
+  - `database` - Database name
+
+  **JWT_SECRET**
+  
+  Secret key for signing JWT tokens. Must be:
+  - At least 32 characters long
+  - Random and unpredictable
+  - Different for each environment
+  
+  Generate a secure secret:
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+
+  **PORT**
+  
+  Port number for the HTTP server (default: 3000)
+
+  **NODE_ENV**
+  
+  Environment mode: `development`, `production`, or `test`
+</Accordion>
+
+### 4. Database Setup
+
+#### Create the Database
+
+If the database doesn't exist, create it:
+
+```bash
+# Using psql
+psql -U postgres -c "CREATE DATABASE kioto_teteria;"
+
+# Or using createdb
+createdb -U postgres kioto_teteria
+```
+
+#### Generate Prisma Client
+
+Generate the Prisma Client based on your schema:
+
+```bash
+pnpm run prisma:generate
+```
+
+This reads the schema from `prisma/schema.prisma` and generates TypeScript types and client methods.
+
+#### Run Migrations
+
+Apply database migrations to create all tables:
+
+```bash
+pnpm run prisma:migrate
+```
+
+This creates the following database schema:
+
+<AccordionGroup>
+  <Accordion title="Admin Table">
+    Stores administrator accounts for backend management.
+    
+    ```prisma
+    model Admin {
+      id           Int     @id @default(autoincrement())
+      email        String  @unique
+      passwordHash String
+      isActive     Boolean @default(true)
+      role         String  @default("ADMIN")
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Category Table">
+    Product categories for organizing the menu.
+    
+    ```prisma
+    model Category {
+      id        Int       @id @default(autoincrement())
+      name      String
+      slug      String    @unique
+      isActive  Boolean   @default(true)
+      createdAt DateTime  @default(now())
+      products  Product[]
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Product Table">
+    Tea and beverage products available for order.
+    
+    ```prisma
+    model Product {
+      id          Int      @id @default(autoincrement())
+      name        String
+      slug        String   @unique
+      description String
+      price       Decimal  @db.Decimal(10, 2)
+      isActive    Boolean  @default(false)
+      createdAt   DateTime @default(now())
+      updatedAt   DateTime @updatedAt
+      categoryId  Int
+      category    Category @relation(fields: [categoryId], references: [id])
+      orderItems  OrderItem[]
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Order & OrderItem Tables">
+    Customer orders and their line items.
+    
+    ```prisma
+    model Order {
+      id            Int         @id @default(autoincrement())
+      customerEmail String
+      totalAmount   Decimal     @db.Decimal(10, 2)
+      status        OrderStatus @default(PENDING)
+      createdAt     DateTime    @default(now())
+      items         OrderItem[]
+    }
+
+    model OrderItem {
+      id        Int     @id @default(autoincrement())
+      quantity  Int
+      unitPrice Decimal @db.Decimal(10, 2)
+      orderId   Int
+      productId Int
+      order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+      product   Product @relation(fields: [productId], references: [id])
+      @@unique([orderId, productId])
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="NewsletterSubscriber Table">
+    Email addresses for newsletter subscriptions.
+    
+    ```prisma
+    model NewsletterSubscriber {
+      id        Int      @id @default(autoincrement())
+      email     String   @unique
+      isActive  Boolean  @default(true)
+      createdAt DateTime @default(now())
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Running the Application
+
+### Development Mode
+
+Start the server with hot-reload:
+
+```bash
+pnpm run start:dev
+```
+
+The server will automatically restart when you make code changes.
+
+### Production Mode
+
+First, build the application:
+
+```bash
+pnpm run build
+```
+
+Then start the production server:
+
+```bash
+pnpm run start:prod
+```
+
+### Debug Mode
+
+Start with debugging enabled:
+
+```bash
+pnpm run start:debug
+```
+
+Attach your debugger to port 9229.
+
+## Verification
+
+After installation, verify everything is working:
+
+<Steps>
+  <Step title="Check server status">
+    Start the server and confirm you see:
+    ```
+    🚀 Server ready at http://localhost:3000
+    ```
+  </Step>
+
+  <Step title="Test API endpoints">
+    Make a test request:
+    ```bash
+    curl http://localhost:3000/products
+    ```
+    
+    Expected response:
+    ```json
+    {
+      "data": [],
+      "meta": {
+        "page": 1,
+        "pageSize": 10,
+        "total": 0,
+        "totalPages": 0
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Verify database connection">
+    Check Prisma Studio to browse your database:
+    ```bash
+    npx prisma studio
+    ```
+    
+    This opens a GUI at http://localhost:5555
+  </Step>
+</Steps>
+
+## Additional Configuration
+
+### Global Validation
+
+The application uses global validation pipes configured in `src/main.ts`:
+
+```typescript src/main.ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,           // Strip non-whitelisted properties
+    forbidNonWhitelisted: true, // Throw error on non-whitelisted properties
+    transform: true,            // Auto-transform payloads to DTO instances
+  }),
+);
+```
+
+This ensures all incoming requests are validated against DTOs using `class-validator`.
+
+### Available Scripts
+
+The following npm scripts are available:
+
+| Script | Description |
+|--------|-------------|
+| `pnpm run start` | Start the server |
+| `pnpm run start:dev` | Start with hot-reload |
+| `pnpm run start:prod` | Start production build |
+| `pnpm run start:debug` | Start with debugger |
+| `pnpm run build` | Build for production |
+| `pnpm run prisma:generate` | Generate Prisma Client |
+| `pnpm run prisma:migrate` | Run database migrations |
+| `pnpm run test` | Run unit tests |
+| `pnpm run test:e2e` | Run end-to-end tests |
+| `pnpm run test:cov` | Run tests with coverage |
+| `pnpm run format` | Format code with Prettier |
+| `pnpm run lint` | Lint code with ESLint |
+
+## Troubleshooting
+
+### Common Installation Issues
+
+<AccordionGroup>
+  <Accordion title="pnpm command not found">
+    Install pnpm globally:
+    ```bash
+    npm install -g pnpm
+    ```
+  </Accordion>
+
+  <Accordion title="PostgreSQL connection refused">
+    Ensure PostgreSQL is running:
+    ```bash
+    # macOS with Homebrew
+    brew services start postgresql
+    
+    # Linux with systemd
+    sudo systemctl start postgresql
+    
+    # Windows
+    # Start from Services panel or pg_ctl
+    ```
+  </Accordion>
+
+  <Accordion title="Prisma Client not found">
+    Regenerate the Prisma Client:
+    ```bash
+    pnpm run prisma:generate
+    ```
+  </Accordion>
+
+  <Accordion title="Migration errors">
+    Reset the database and migrations (WARNING: deletes all data):
+    ```bash
+    npx prisma migrate reset
+    ```
+  </Accordion>
+
+  <Accordion title="Port already in use">
+    Change the port in `.env`:
+    ```bash
+    PORT=3001
+    ```
+    
+    Or kill the process using port 3000:
+    ```bash
+    # Find process
+    lsof -i :3000
+    
+    # Kill process
+    kill -9 <PID>
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Follow the quickstart to make your first API request
+  </Card>
+  
+  <Card title="Authentication Setup" icon="key" href="/core/authentication">
+    Create admin users and secure your endpoints
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    Explore all available API endpoints
+  </Card>
+  
+  <Card title="Database Schema" icon="database" href="/core/database">
+    Deep dive into the database structure
+  </Card>
+</CardGroup>

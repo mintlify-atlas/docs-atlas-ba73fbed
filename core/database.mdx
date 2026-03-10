@@ -1,0 +1,397 @@
+---
+title: Database
+description: Prisma ORM and PostgreSQL database architecture in Kioto Teteria Backend
+---
+
+## Overview
+
+Kioto Teteria Backend uses [Prisma](https://www.prisma.io/) as the ORM layer with PostgreSQL as the database. Prisma provides type-safe database queries and schema management through migrations.
+
+## Database Configuration
+
+The database is configured in `prisma/schema.prisma`:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+### Environment Variables
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string in the format:
+  `postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA`
+</ParamField>
+
+Example:
+```
+DATABASE_URL="postgresql://admin:password@localhost:5432/kioto_db?schema=public"
+```
+
+## Data Models
+
+The system defines the following models:
+
+### Admin
+
+Stores admin user credentials and roles for authentication:
+
+```prisma
+model Admin {
+  id           Int     @id @default(autoincrement())
+  email        String  @unique
+  passwordHash String
+  isActive     Boolean @default(true)
+  role         String  @default("ADMIN")
+}
+```
+
+**Key Fields:**
+- `email` - Unique identifier for login
+- `passwordHash` - bcrypt hashed password (never store plain text)
+- `isActive` - Controls whether the admin can authenticate
+- `role` - Used for authorization checks
+
+### Category
+
+Product categories with URL-friendly slugs:
+
+```prisma
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+}
+```
+
+**Key Fields:**
+- `slug` - Auto-generated from name, used in URLs
+- `isActive` - Soft delete flag
+- `products` - One-to-many relation with products
+
+### Product
+
+Tea products with pricing and category relationships:
+
+```prisma
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  slug        String   @unique
+  description String
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  orderItems  OrderItem[]
+}
+```
+
+**Key Fields:**
+- `price` - Decimal with 2 decimal places for currency
+- `isActive` - Products are inactive by default (must be explicitly activated)
+- `categoryId` - Foreign key to Category
+- `updatedAt` - Automatically updated on changes
+
+### Order
+
+Customer orders with status tracking:
+
+```prisma
+model Order {
+  id            Int         @id @default(autoincrement())
+  customerEmail String
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  status        OrderStatus @default(PENDING)
+  createdAt     DateTime    @default(now())
+  items         OrderItem[]
+}
+```
+
+**Statuses:**
+```prisma
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+```
+
+### OrderItem
+
+Line items within orders:
+
+```prisma
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+
+  orderId   Int
+  productId Int
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+}
+```
+
+**Key Features:**
+- Composite unique constraint prevents duplicate products in same order
+- Cascade delete when order is deleted
+- Stores `unitPrice` at time of order (price snapshot)
+
+### NewsletterSubscriber
+
+Email newsletter subscriptions:
+
+```prisma
+model NewsletterSubscriber {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+```
+
+## Using Prisma Client
+
+Prisma Client is injected through the `PrismaService`:
+
+```typescript
+@Injectable()
+export class CategoriesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findAll(): Promise<Category[]> {
+    return await this.prisma.category.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+}
+```
+
+From `src/modules/categories/categories.service.ts:43`
+
+### Common Operations
+
+#### Finding Records
+
+```typescript
+// Find unique by ID
+const category = await this.prisma.category.findUnique({
+  where: { id: 1 }
+});
+
+// Find unique by slug
+const category = await this.prisma.category.findUnique({
+  where: { slug: 'green-tea' }
+});
+
+// Find many with filtering
+const products = await this.prisma.product.findMany({
+  where: { categoryId: 1 },
+  orderBy: { createdAt: 'desc' }
+});
+```
+
+#### Creating Records
+
+```typescript
+const category = await this.prisma.category.create({
+  data: {
+    name: 'Green Tea',
+    slug: 'green-tea',
+    isActive: true,
+  },
+});
+```
+
+From `src/modules/categories/categories.service.ts:24`
+
+#### Updating Records
+
+```typescript
+const product = await this.prisma.product.update({
+  where: { id },
+  data: { isActive },
+});
+```
+
+From `src/modules/products/products.service.ts:91`
+
+#### Deleting Records
+
+```typescript
+const category = await this.prisma.category.delete({
+  where: { id },
+});
+```
+
+## Error Handling
+
+Prisma throws specific error codes for common issues:
+
+### Unique Constraint Violations
+
+```typescript
+try {
+  return await this.prisma.category.create({
+    data: { name, slug, isActive },
+  });
+} catch (error) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  ) {
+    throw new BadRequestException('Category name or slug already exists');
+  }
+  throw error;
+}
+```
+
+From `src/modules/categories/categories.service.ts:23`
+
+**Common Error Codes:**
+- `P2002` - Unique constraint violation
+- `P2025` - Record not found
+- `P2003` - Foreign key constraint violation
+
+## Transactions
+
+For operations requiring multiple queries atomically:
+
+```typescript
+const [products, total] = await this.prisma.$transaction([
+  this.prisma.product.findMany({
+    where,
+    skip,
+    take,
+    orderBy: { createdAt: 'desc' },
+  }),
+  this.prisma.product.count({ where }),
+]);
+```
+
+From `src/modules/products/products.service.ts:27`
+
+This ensures both queries see a consistent snapshot of the database.
+
+## Relations
+
+### Loading Related Data
+
+```typescript
+const category = await this.prisma.category.findUnique({
+  where: { id: 1 },
+  include: {
+    products: true,
+  },
+});
+```
+
+### Nested Creates
+
+```typescript
+const order = await this.prisma.order.create({
+  data: {
+    customerEmail: 'customer@example.com',
+    totalAmount: 50.00,
+    items: {
+      create: [
+        { productId: 1, quantity: 2, unitPrice: 25.00 }
+      ]
+    }
+  }
+});
+```
+
+## Migrations
+
+Prisma uses migration files to version control schema changes:
+
+```bash
+# Create a new migration
+npx prisma migrate dev --name add_new_field
+
+# Apply migrations in production
+npx prisma migrate deploy
+
+# Reset database (development only)
+npx prisma migrate reset
+```
+
+<Warning>
+  Never use `prisma migrate reset` in production - it will delete all data!
+</Warning>
+
+## Prisma Studio
+
+View and edit data using Prisma's GUI:
+
+```bash
+npx prisma studio
+```
+
+Access at `http://localhost:5555`
+
+## Type Safety
+
+Prisma generates TypeScript types from your schema:
+
+```typescript
+import { Category, Product, Prisma } from '@prisma/client';
+
+// Typed return values
+async findAll(): Promise<Category[]> {
+  return await this.prisma.category.findMany();
+}
+
+// Typed input data
+const data: Prisma.CategoryUpdateInput = {
+  name: 'Updated Name',
+};
+```
+
+From `src/modules/categories/categories.service.ts:77`
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use soft deletes">
+    Instead of deleting records, use `isActive: false` to preserve data and prevent breaking relationships.
+  </Accordion>
+
+  <Accordion title="Handle unique constraints">
+    Always catch `P2002` errors and provide user-friendly error messages.
+  </Accordion>
+
+  <Accordion title="Use transactions for consistency">
+    When fetching data and counts for pagination, use `$transaction` to ensure consistency.
+  </Accordion>
+
+  <Accordion title="Store price snapshots">
+    OrderItems store `unitPrice` to preserve pricing at time of purchase, even if product prices change.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Pagination](/core/pagination) - Using Prisma for paginated queries
+- [Authentication](/core/authentication) - Admin model usage in auth

@@ -1,0 +1,138 @@
+---
+title: 'Login'
+api: 'POST /auth/login'
+description: 'Authenticate an admin user and receive an access token'
+---
+
+Authenticates an admin user with email and password credentials. Returns a JWT access token upon successful authentication.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  Admin email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Admin password. Cannot be empty.
+</ParamField>
+
+## Response
+
+<ResponseField name="access_token" type="string">
+  JWT access token for authenticating subsequent API requests. The token contains the admin's ID, email, and role as payload.
+</ResponseField>
+
+### Success Response
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMzQ1Njc4OTAiLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+}
+```
+
+## Error Responses
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code (400 for bad requests)
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing what went wrong
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error type identifier
+</ResponseField>
+
+### Invalid Credentials
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid credentials",
+  "error": "Bad Request"
+}
+```
+
+This error is returned when:
+- The email doesn't match any admin user
+- The admin account is inactive
+- The password is incorrect
+
+### Validation Errors
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "email must be an email",
+    "password should not be empty"
+  ],
+  "error": "Bad Request"
+}
+```
+
+This error is returned when the request body doesn't meet validation requirements.
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.example.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.example.com/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'admin@example.com',
+    password: 'securePassword123'
+  })
+});
+
+const data = await response.json();
+console.log(data.access_token);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.example.com/auth/login',
+    json={
+        'email': 'admin@example.com',
+        'password': 'securePassword123'
+    }
+)
+
+data = response.json()
+print(data['access_token'])
+```
+
+</CodeGroup>
+
+## Implementation Details
+
+- **Endpoint**: `POST /auth/login`
+- **Controller**: `auth.controller.ts:9`
+- **Service**: `auth.service.ts:12`
+- **DTO**: `login.dto.ts:3`
+- **Authentication**: Not required (public endpoint)
+- **Password Hashing**: Uses bcrypt for secure password comparison
+- **JWT Payload**: Contains `id`, `email`, and `role` fields
+
+## Security Notes
+
+- Only active admin accounts can authenticate
+- Passwords are never returned in responses
+- Failed login attempts return generic "Invalid credentials" messages to prevent user enumeration
+- Access tokens should be stored securely and included in the Authorization header for protected endpoints

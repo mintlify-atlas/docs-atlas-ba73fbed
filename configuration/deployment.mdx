@@ -1,0 +1,755 @@
+---
+title: Deployment
+description: Production deployment guide for the Kioto Teteria backend with build optimization, database migrations, and platform-specific configurations
+---
+
+This guide covers deploying the Kioto Teteria NestJS backend to production environments, including build optimization, database setup, and platform-specific configurations.
+
+## Pre-Deployment Checklist
+
+<Steps>
+  <Step title="Set environment variables">
+    Configure all required environment variables in your deployment platform:
+    - `DATABASE_URL` - PostgreSQL connection string
+    - `JWT_SECRET` - Secure JWT signing key (min 32 chars)
+    - `PORT` - Application port (optional, defaults to 3000)
+  </Step>
+
+  <Step title="Build the application">
+    Ensure the application builds successfully:
+    ```bash
+    pnpm run build
+    ```
+  </Step>
+
+  <Step title="Run database migrations">
+    Apply all Prisma migrations to your production database:
+    ```bash
+    pnpm run prisma:generate
+    npx prisma migrate deploy
+    ```
+  </Step>
+
+  <Step title="Test production build locally">
+    Verify the production build runs correctly:
+    ```bash
+    pnpm run start:prod
+    ```
+  </Step>
+</Steps>
+
+## Build Process
+
+The application uses the NestJS CLI for building. Configuration is defined in `nest-cli.json` and `tsconfig.json`.
+
+### Production Build
+
+```bash
+pnpm run build
+```
+
+This command (defined in `package.json:9`):
+1. Runs `nest build` which compiles TypeScript to JavaScript
+2. Outputs compiled files to `./dist` directory
+3. Includes source maps for debugging
+4. Removes comments from output (configured in `tsconfig.json:9`)
+5. Generates declaration files
+
+**Build configuration** (`nest-cli.json:5-7`):
+```json
+{
+  "compilerOptions": {
+    "deleteOutDir": true  // Cleans dist folder before each build
+  }
+}
+```
+
+**TypeScript compiler options** (`tsconfig.json`):
+- Target: ES2023
+- Module: NodeNext (ESM + CommonJS interop)
+- Output directory: `./dist`
+- Strict mode enabled
+- Decorators: Experimental (required for NestJS)
+
+### Build Optimization
+
+For smaller bundle sizes and faster cold starts:
+
+<CodeGroup>
+```bash Production build
+# Standard production build
+pnpm run build
+
+# Build output is in ./dist
+ls -lh dist/
+```
+
+```bash Build with tree-shaking
+# The NestJS build automatically tree-shakes unused code
+# No additional configuration needed
+pnpm run build
+```
+</CodeGroup>
+
+<Note>
+  The build process automatically handles:
+  - TypeScript compilation
+  - Decorator metadata emission
+  - Source map generation
+  - Module resolution for Node.js
+</Note>
+
+## Database Setup
+
+Before starting the application, set up your production database.
+
+### Generate Prisma Client
+
+```bash
+pnpm run prisma:generate
+```
+
+This generates the Prisma Client based on your schema (`prisma/schema.prisma`).
+
+**Prisma configuration** (`prisma.config.ts`):
+```typescript
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: {
+    path: 'prisma/migrations',
+  },
+  datasource: {
+    url: process.env.DATABASE_URL,
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
+  },
+});
+```
+
+### Run Migrations
+
+<Warning>
+  Always backup your production database before running migrations.
+</Warning>
+
+```bash
+# Deploy pending migrations to production
+npx prisma migrate deploy
+
+# Verify migration status
+npx prisma migrate status
+```
+
+**Migration behavior:**
+- Applies all pending migrations in order
+- Creates `_prisma_migrations` table to track applied migrations
+- Does not generate new migrations (safe for production)
+- Exits with error if migrations fail
+
+### Database Models
+
+The schema includes:
+- `Admin` - Administrative users with JWT authentication
+- `Category` - Product categories with slugs
+- `Product` - Tea products with pricing and descriptions
+- `Order` - Customer orders with status tracking
+- `OrderItem` - Individual items in orders
+- `NewsletterSubscriber` - Email subscribers
+
+## Starting the Application
+
+### Production Mode
+
+```bash
+pnpm run start:prod
+```
+
+This command (defined in `package.json:14`):
+- Runs the compiled JavaScript: `node dist/main`
+- Starts on port specified by `PORT` env variable (default: 3000)
+- Enables production optimizations
+- Logs startup status to console
+
+**Application bootstrap** (`src/main.ts:5-27`):
+```typescript
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  
+  console.log(`🚀 Server ready at http://localhost:${port}`);
+}
+```
+
+### Development Mode
+
+```bash
+# Start with file watching
+pnpm run start:dev
+
+# Start with debugging
+pnpm run start:debug
+```
+
+<Tip>
+  In development, use `start:dev` for automatic restarts on file changes.
+</Tip>
+
+## Platform-Specific Deployment
+
+### Docker Deployment
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+# Multi-stage build for smaller image
+FROM node:20-alpine AS builder
+
+# Install pnpm
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY prisma ./prisma/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Generate Prisma Client
+RUN pnpm run prisma:generate
+
+# Build application
+RUN pnpm run build
+
+# Production stage
+FROM node:20-alpine
+
+# Install pnpm
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/prisma ./prisma
+
+# Expose port
+EXPOSE 3000
+
+# Run migrations and start app
+CMD ["sh", "-c", "npx prisma migrate deploy && pnpm run start:prod"]
+```
+
+**Docker Compose** (`docker-compose.yml`):
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/kioto_teteria
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: kioto_teteria
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+```
+
+**Deploy with Docker:**
+
+```bash
+# Build and start
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+
+# Stop services
+docker-compose down
+```
+
+### Railway Deployment
+
+<Steps>
+  <Step title="Install Railway CLI">
+    ```bash
+    npm install -g @railway/cli
+    railway login
+    ```
+  </Step>
+
+  <Step title="Initialize Railway project">
+    ```bash
+    railway init
+    ```
+  </Step>
+
+  <Step title="Add PostgreSQL database">
+    ```bash
+    railway add --database postgresql
+    ```
+    Railway automatically sets `DATABASE_URL`.
+  </Step>
+
+  <Step title="Set environment variables">
+    ```bash
+    railway variables set JWT_SECRET=your-secret-key
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    railway up
+    ```
+  </Step>
+</Steps>
+
+**Railway configuration** (`railway.json`):
+
+```json
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pnpm install && pnpm run build && pnpm run prisma:generate"
+  },
+  "deploy": {
+    "startCommand": "npx prisma migrate deploy && pnpm run start:prod",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
+```
+
+### Heroku Deployment
+
+<Steps>
+  <Step title="Install Heroku CLI">
+    ```bash
+    npm install -g heroku
+    heroku login
+    ```
+  </Step>
+
+  <Step title="Create Heroku app">
+    ```bash
+    heroku create kioto-teteria-backend
+    ```
+  </Step>
+
+  <Step title="Add PostgreSQL addon">
+    ```bash
+    heroku addons:create heroku-postgresql:mini
+    ```
+  </Step>
+
+  <Step title="Set environment variables">
+    ```bash
+    heroku config:set JWT_SECRET=your-secret-key
+    ```
+  </Step>
+
+  <Step title="Add Procfile">
+    Create `Procfile` in project root:
+    ```
+    release: npx prisma migrate deploy
+    web: pnpm run start:prod
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    git push heroku main
+    ```
+  </Step>
+</Steps>
+
+### AWS (Elastic Beanstalk)
+
+<Steps>
+  <Step title="Install EB CLI">
+    ```bash
+    pip install awsebcli
+    ```
+  </Step>
+
+  <Step title="Initialize EB application">
+    ```bash
+    eb init -p node.js kioto-teteria-backend
+    ```
+  </Step>
+
+  <Step title="Create environment">
+    ```bash
+    eb create production
+    ```
+  </Step>
+
+  <Step title="Set environment variables">
+    ```bash
+    eb setenv DATABASE_URL=postgresql://... JWT_SECRET=...
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    eb deploy
+    ```
+  </Step>
+</Steps>
+
+**Elastic Beanstalk configuration** (`.ebextensions/nodecommand.config`):
+
+```yaml
+option_settings:
+  aws:elasticbeanstalk:container:nodejs:
+    NodeCommand: "npm run start:prod"
+    NodeVersion: 20
+  aws:elasticbeanstalk:application:environment:
+    NPM_USE_PRODUCTION: false
+
+container_commands:
+  01_install_pnpm:
+    command: "npm install -g pnpm"
+  02_install_dependencies:
+    command: "pnpm install"
+  03_build:
+    command: "pnpm run build"
+  04_prisma_generate:
+    command: "pnpm run prisma:generate"
+  05_migrate:
+    command: "npx prisma migrate deploy"
+```
+
+### VPS / Linux Server
+
+<Steps>
+  <Step title="Install Node.js and pnpm">
+    ```bash
+    # Install Node.js 20
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+
+    # Install pnpm
+    sudo npm install -g pnpm
+    ```
+  </Step>
+
+  <Step title="Clone repository">
+    ```bash
+    git clone https://github.com/your-org/kioto-teteria-backend.git
+    cd kioto-teteria-backend
+    ```
+  </Step>
+
+  <Step title="Install dependencies and build">
+    ```bash
+    pnpm install
+    pnpm run build
+    pnpm run prisma:generate
+    ```
+  </Step>
+
+  <Step title="Set up environment variables">
+    ```bash
+    sudo nano /etc/environment
+    # Add:
+    # DATABASE_URL="postgresql://..."
+    # JWT_SECRET="..."
+    ```
+  </Step>
+
+  <Step title="Run database migrations">
+    ```bash
+    npx prisma migrate deploy
+    ```
+  </Step>
+
+  <Step title="Set up PM2 for process management">
+    ```bash
+    sudo npm install -g pm2
+    pm2 start dist/main.js --name kioto-backend
+    pm2 startup
+    pm2 save
+    ```
+  </Step>
+
+  <Step title="Configure Nginx reverse proxy">
+    ```nginx
+    server {
+      listen 80;
+      server_name api.kioto-teteria.com;
+
+      location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Health Checks
+
+Implement health check endpoints for monitoring:
+
+```typescript
+// src/app.controller.ts
+@Get('health')
+getHealth() {
+  return {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  };
+}
+
+@Get('health/db')
+async getDatabaseHealth() {
+  try {
+    await this.prisma.$queryRaw`SELECT 1`;
+    return { status: 'ok', database: 'connected' };
+  } catch (error) {
+    throw new HttpException(
+      { status: 'error', database: 'disconnected' },
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+}
+```
+
+**Configure monitoring:**
+
+```bash
+# Check application health
+curl https://your-app.com/health
+
+# Check database connectivity
+curl https://your-app.com/health/db
+```
+
+## Performance Optimization
+
+### Connection Pooling
+
+Prisma automatically manages connection pooling. Configure pool size via DATABASE_URL:
+
+```bash
+DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=10"
+```
+
+### Caching
+
+Add Redis for caching frequently accessed data:
+
+```typescript
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
+
+@Module({
+  imports: [
+    CacheModule.register({
+      store: redisStore,
+      host: process.env.REDIS_HOST,
+      port: process.env.REDIS_PORT,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Logging
+
+Configure production logging:
+
+```typescript
+const app = await NestFactory.create(AppModule, {
+  logger: ['error', 'warn', 'log'],
+});
+```
+
+## Security Hardening
+
+<AccordionGroup>
+  <Accordion title="Enable CORS">
+    ```typescript
+    app.enableCors({
+      origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'],
+      credentials: true,
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Add Helmet for security headers">
+    ```bash
+    pnpm add helmet
+    ```
+    
+    ```typescript
+    import helmet from 'helmet';
+    app.use(helmet());
+    ```
+  </Accordion>
+
+  <Accordion title="Rate limiting">
+    ```bash
+    pnpm add @nestjs/throttler
+    ```
+    
+    ```typescript
+    import { ThrottlerModule } from '@nestjs/throttler';
+    
+    @Module({
+      imports: [
+        ThrottlerModule.forRoot([{
+          ttl: 60000,
+          limit: 10,
+        }]),
+      ],
+    })
+    ```
+  </Accordion>
+
+  <Accordion title="Environment variable validation">
+    Install validation packages:
+    ```bash
+    pnpm add joi
+    ```
+    
+    Configure validation schema:
+    ```typescript
+    import * as Joi from 'joi';
+    
+    ConfigModule.forRoot({
+      validationSchema: Joi.object({
+        DATABASE_URL: Joi.string().required(),
+        JWT_SECRET: Joi.string().min(32).required(),
+        PORT: Joi.number().default(3000),
+      }),
+    })
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring and Logging
+
+### Application Logs
+
+```bash
+# Docker logs
+docker-compose logs -f backend
+
+# PM2 logs
+pm2 logs kioto-backend
+
+# Heroku logs
+heroku logs --tail
+
+# Railway logs
+railway logs
+```
+
+### Performance Monitoring
+
+Integrate APM tools:
+- **New Relic**: Application performance monitoring
+- **Datadog**: Infrastructure and application monitoring
+- **Sentry**: Error tracking and reporting
+- **CloudWatch**: AWS-native monitoring
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails">
+    **Solutions:**
+    1. Clear build cache: `rm -rf dist node_modules && pnpm install`
+    2. Check TypeScript errors: `npx tsc --noEmit`
+    3. Verify all dependencies are installed
+    4. Check `tsconfig.json` configuration
+  </Accordion>
+
+  <Accordion title="Migration fails in production">
+    **Solutions:**
+    1. Backup database before migrating
+    2. Run `npx prisma migrate status` to check state
+    3. Resolve migration conflicts manually
+    4. Use `npx prisma migrate resolve` for failed migrations
+    5. Never run `prisma migrate dev` in production
+  </Accordion>
+
+  <Accordion title="Application crashes on startup">
+    **Solutions:**
+    1. Check environment variables are set
+    2. Verify database connectivity
+    3. Review application logs
+    4. Ensure Prisma Client is generated
+    5. Check port is not already in use
+  </Accordion>
+
+  <Accordion title="High memory usage">
+    **Solutions:**
+    1. Reduce Prisma connection pool size
+    2. Implement caching for frequently accessed data
+    3. Monitor for memory leaks
+    4. Increase server resources
+    5. Enable Node.js heap snapshots for analysis
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/configuration/environment">
+    Configure environment-specific settings
+  </Card>
+  <Card title="Database Management" icon="database" href="/core/database">
+    Learn about database schema and migrations
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Explore API endpoints and authentication
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/core/authentication">
+    Understand authentication and authorization
+  </Card>
+</CardGroup>
